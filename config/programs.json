@@ -1,0 +1,40 @@
+{
+    "nhk": [
+        {"name": "ドキュメント72時間", "url": "https://www.web.nhk/tv/an/72hours/pl/series-tep-W3W8WRN8M3", "channel": "NHK総合"},
+        {"name": "キャッチ!世界のトップニュース", "url": "https://www.web.nhk/tv/an/catchsekai/pl/series-tep-KQ2GPZPJWM", "channel": "NHK総合"},
+        {"name": "みみより!解説", "url": "https://www.web.nhk/tv/pl/series-tep-X67KZLM3P6", "channel": "NHK総合"},
+        {"name": "視点・論点", "url": "https://www.web.nhk/tv/pl/series-tep-Y5P47Z7YVW", "channel": "NHK Eテレ"},
+        {"name": "所さん!事件ですよ", "url": "https://www.web.nhk/tv/an/jikentokoro/pl/series-tep-G69KQR33PG", "channel": "NHK総合"},
+        {"name": "クローズアップ現代", "url": "https://www.web.nhk/tv/an/gendai/pl/series-tep-R7Y6NGLJ6G", "channel": "NHK総合"},
+        {"name": "新プロジェクトX〜挑戦者たち〜", "url": "https://www.web.nhk/tv/pl/series-tep-P1124VMJ6R", "channel": "NHK総合"},
+        {"name": "サタデーウオッチ9", "url": "https://www.web.nhk/tv/pl/series-tep-7K78K8ZNJV", "channel": "NHK総合"},
+        {"name": "NHKスペシャル", "url": "https://www.web.nhk/tv/an/special/pl/series-tep-2NY2QQLPM3", "channel": "NHK総合"},
+        {"name": "国際報道 {year}", "url": "https://www.web.nhk/tv/an/kokusaihoudou/pl/series-tep-8M689W8RVX", "channel": "NHK BS"},
+        {"name": "映像の世紀バタフライエフェクト", "url": "https://www.web.nhk/tv/an/butterfly/pl/series-tep-9N81M92LXV", "channel": "NHK総合"},
+        {"name": "BSスペシャル", "url": "https://www.web.nhk/tv/an/bssp/pl/series-tep-6NMMPMNK5K", "channel": "NHK BS"},
+        {"name": "時論公論", "url": "https://www.web.nhk/tv/pl/series-tep-4V23PRP3YR", "channel": "NHK総合"},
+        {"name": "ETV特集", "url": "https://www.web.nhk/tv/an/etv21c/pl/series-tep-M2ZWLQ6RQP", "channel": "NHK Eテレ"},
+        {"name": "首都圏情報 ネタドリ!", "url": "https://www.web.nhk/tv/an/netadori/pl/series-tep-QL8GZ2L5VX", "channel": "NHK総合"},
+        {"name": "時をかけるテレビ", "url": "https://www.web.nhk/tv/an/tokikaketv/pl/series-tep-WQGK99QWJZ", "channel": "NHK総合"},
+        {"name": "ドキュランドへようこそ", "url": "https://www.web.nhk/tv/an/docland/pl/series-tep-KZGVPVRXZN", "channel": "NHK Eテレ"},
+        {"name": "プロフェッショナル 仕事の流儀", "url": "https://www.web.nhk/tv/an/professional/pl/series-tep-8X88ZVMGV5", "channel": "NHK総合"},
+        {"name": "ブラタモリ", "url": "https://www.web.nhk/tv/an/buratamori/pl/series-tep-D8K46WY9MZ", "channel": "NHK総合"},
+        {"name": "ドキュメント20min.", "url": "https://www.web.nhk/tv/pl/series-tep-YN5YRJ9KP6", "channel": "NHK総合"},
+        {"name": "未解決事件", "url": "https://www.web.nhk/tv/an/mikaiketsu/pl/series-tep-57615R8KYY", "channel": "NHK総合"}
+    ],
+    "tvtokyo": [
+        {"name": "WBS", "channel": "テレ東", "time": "22:00-22:58", "urls": ["https://txbiz.tv-tokyo.co.jp/wbs/oa", "https://txbiz.tv-tokyo.co.jp/wbs/feature", "https://txbiz.tv-tokyo.co.jp/wbs/trend_tamago"]},
+        {"name": "モーサテ", "channel": "テレ東", "time": "05:45-07:05", "urls": ["https://txbiz.tv-tokyo.co.jp/nms/special", "https://txbiz.tv-tokyo.co.jp/nms/smpfeature", "https://txbiz.tv-tokyo.co.jp/nms/feature"]},
+        {"name": "ガイアの夜明け", "channel": "テレ東", "time": "22:00-22:54", "urls": ["https://txbiz.tv-tokyo.co.jp/gaia/oa", "https://txbiz.tv-tokyo.co.jp/gaia/feature"]},
+        {"name": "カンブリア宮殿", "channel": "テレ東", "time": "23:06-23:55", "urls": ["https://txbiz.tv-tokyo.co.jp/cambria/oa"]}
+    ],
+    "twitter": {
+        "user": "nhk_docudocu",
+        "programs": [
+            "アナザーストーリーズ",
+            "世界のドキュメンタリー",
+            "Asia Insight",
+            "英雄たちの選択"
+        ]
+    }
+}
