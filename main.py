@@ -6,7 +6,7 @@ from actions.open import run_open
 
 def print_help():
     print("""
-使用方法: python main.py [コマンド] [日付:YYYYMMDD]
+使用方法: python main.py [コマンド] [日付:YYYYMMDD] (日付省略時は前日)
 コマンド一覧:
   gather   - WebスクレイピングとTwitter情報収集を行い、結果をファイルに保存します。
   open     - 取得した情報に含まれるURLをブラウザで一括で開きます。
@@ -14,12 +14,19 @@ def print_help():
 """)
 
 def main():
-    if len(sys.argv) < 3:
+    if len(sys.argv) < 2:
         print_help()
         sys.exit(1)
         
     command = sys.argv[1]
-    target_date = sys.argv[2]
+    
+    if len(sys.argv) >= 3:
+        target_date = sys.argv[2]
+    else:
+        # デフォルトは前日
+        from datetime import timedelta
+        target_date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
+        print(f"INFO: 日付が指定されていないため、前日の日付 ({target_date}) を使用します。")
     
     try:
         datetime.strptime(target_date, "%Y%m%d")
