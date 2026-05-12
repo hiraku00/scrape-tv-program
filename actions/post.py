@@ -6,6 +6,16 @@ from datetime import datetime
 from core.logger import setup_logger
 from dotenv import load_dotenv
 
+def get_tweet_length(text):
+    """Twitterのカウント方法（半角1, 全角2）で文字数を計算"""
+    length = 0
+    for char in text:
+        if ord(char) <= 127:
+            length += 1
+        else:
+            length += 2
+    return length
+
 def run_post(target_date_str: str):
     logger = setup_logger("post")
     load_dotenv()
@@ -46,7 +56,7 @@ def run_post(target_date_str: str):
         if not block.strip():
             continue
             
-        # 最初の番組にヘッダーを付与
+        # 最初の番組にのみヘッダーを付与
         if i == 0:
             tweet_text = header + block
         else:
