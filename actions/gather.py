@@ -110,12 +110,6 @@ def run_gather(target_date_str: str):
         before_split_file.unlink()
 
     # 2. メインファイル（分割済み）を保存
-    # 既存ファイルがある場合は念のため .bak に退避（手動編集の保護）
-    if out_file.exists():
-        bak_file = out_file.with_suffix(".txt.bak")
-        import shutil
-        shutil.copy(str(out_file), str(bak_file))
-    
     with open(out_file, "w", encoding="utf-8") as f:
         f.write("\n\n".join(final_output_blocks) + "\n")
         
