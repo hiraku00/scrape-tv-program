@@ -48,10 +48,100 @@ class NHKScraper(BaseScraper):
         m = re.match(r"(午前|午後)(\d{1,2}):(\d{2})", time_str.strip())
         if m:
             ampm, h, m_str = m.group(1), int(m.group(2)), m.group(3)
-            if ampm == "午後" and h < 12: h += 12
-            elif ampm == "午前" and h == 12: h = 0
+            if ampm == "午後" and h < 12:
+                h += 12
+            elif ampm == "午前" and h == 12:
+                h = 0
             return f"{h:02d}:{m_str}"
         return time_str
+
+    def _extract_title_from_anchor(self, a_tag, name: str) -> str:
+        p_texts = [p.get_text(" ", strip=True) for p in a_tag.find_all("p")]
+
+        # まず明確なタイトルっぽいテキストを取得
+        for text in p_texts:
+            if not text or text == name:
+                continue
+            if re.fullmatch(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日(?:.*)?", text):
+                continue
+            if re.fullmatch(r"^『.*』の番組エピソードです$", text):
+                continue
+            if name in text and len(text) > len(name) + 2:
+                return text.replace(name, "").strip()
+            return text
+
+        # 日付だけしかなければ日付をタイトル扱い
+        for text in p_texts:
+            if re.fullmatch(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日", text):
+                return text
+
+        return ""
+
+    def _is_generic_detail_description(self, text: str) -> bool:
+        if not text:
+            return True
+        text = text.strip()
+        if re.fullmatch(r"^【NHK】.*番組エピソードです$", text):
+            return True
+        if re.fullmatch(r"^.*番組エピソードです$", text):
+            return True
+        return False
+
+    def _extract_title_from_detail(self, dsoup, name: str) -> str:
+        # 優先順序: og:description -> description -> og:title -> title -> h1
+        title_text = ""
+        for selector in [
+            "meta[property='og:description']",
+            "meta[name='description']",
+        ]:
+            tag = dsoup.select_one(selector)
+            if tag:
+                content = tag.get("content", "").strip()
+                if content and not self._is_generic_detail_description(content):
+                    title_text = content
+                    break
+
+        if not title_text:
+            for selector in [
+                "meta[property='og:title']",
+                "meta[name='title']",
+            ]:
+                tag = dsoup.select_one(selector)
+                if tag:
+                    title_text = tag.get("content", "").strip()
+                    if title_text:
+                        break
+
+        if not title_text:
+            title_tag = dsoup.select_one("title")
+            if title_tag:
+                title_text = title_tag.get_text(" ", strip=True)
+
+        if not title_text:
+            heading = dsoup.select_one("h1")
+            if heading:
+                title_text = heading.get_text(" ", strip=True)
+
+        if title_text:
+            title_text = title_text.replace(name, "").strip()
+            title_text = re.sub(r"^\s*[-–—|｜]\s*", "", title_text)
+            title_text = re.sub(r"\s*[-–—|｜]\s*$", "", title_text)
+            title_text = re.sub(r"\s*[-–—|｜]\s*NHK.*$", "", title_text)
+            title_text = title_text.strip("「」『』 ")
+
+        return title_text
+
+    def _extract_time_from_detail(self, dsoup, current_time_info: str) -> str:
+        time_span = dsoup.select_one("div.f1vveb2x span.f1yrc8pc") or dsoup.select_one("p.f1yrc8pc")
+        if time_span:
+            time_text = time_span.get_text(strip=True)
+            if "-" in time_text:
+                parts = time_text.split("-")
+                s = self._convert_to_24h_format(parts[0])
+                e = self._convert_to_24h_format(parts[1])
+                return f"{s}-{e}"
+            return self._convert_to_24h_format(time_text)
+        return current_time_info
 
     def _fetch_program(self, name: str, url: str, channel: str, target_date: datetime) -> List[Episode]:
         # (中略) 一覧ページからの取得
@@ -81,15 +171,17 @@ class NHKScraper(BaseScraper):
             if datetime(y, m, d).date() != target_date.date(): continue
 
             # タイトル抽出
-            title_candidate = text
-            if "初回放送日" in text:
-                title_candidate = text.split("初回放送日")[0]
-            
-            # ノイズ除去
-            title_candidate = re.sub(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日.*$", "", title_candidate)
-            title_candidate = re.sub(r"^\s*(?:\d+時間\s*)?(?:\d+分\s*)?(?:\d+秒\s*)?", "", title_candidate)
-            title_candidate = title_candidate.replace(name, "").strip()
-            title_candidate = title_candidate.strip("「」『』")
+            title_candidate = self._extract_title_from_anchor(a_tag, name)
+            if not title_candidate:
+                title_candidate = text
+                if "初回放送日" in text:
+                    title_candidate = text.split("初回放送日")[0]
+                
+                # ノイズ除去
+                title_candidate = re.sub(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日.*$", "", title_candidate)
+                title_candidate = re.sub(r"^\s*(?:\d+時間\s*)?(?:\d+分\s*)?(?:\d+秒\s*)?", "", title_candidate)
+                title_candidate = title_candidate.replace(name, "").strip()
+                title_candidate = title_candidate.strip("「」『』")
 
             # 時間情報の抽出
             time_info = ""
@@ -122,25 +214,26 @@ class NHKScraper(BaseScraper):
             full_url = href if href.startswith("http") else "https://www.web.nhk" + href
             seen_urls.add(href)
 
-            # 一覧で時間が不十分な場合、詳細ページへアクセス
-            if not time_info or "-" not in time_info:
+            # 一覧でタイトルが取得できない、あるいは時間情報が不十分な場合、詳細ページへアクセス
+            detail_soup = None
+            if not title_candidate.strip() or not time_info or "-" not in time_info:
                 try:
                     detail_resp = requests.get(full_url, headers=self.HEADERS, timeout=self.TIMEOUT)
-                    if detail_resp.status_code == 200:
-                        dsoup = BeautifulSoup(detail_resp.text, "html.parser")
-                        # 複数のセレクタ候補
-                        time_span = dsoup.select_one("div.f1vveb2x span.f1yrc8pc") or dsoup.select_one("p.f1yrc8pc")
-                        if time_span:
-                            time_text = time_span.get_text(strip=True)
-                            if "-" in time_text:
-                                parts = time_text.split("-")
-                                s = self._convert_to_24h_format(parts[0])
-                                e = self._convert_to_24h_format(parts[1])
-                                time_info = f"{s}-{e}"
-                            else:
-                                time_info = self._convert_to_24h_format(time_text)
-                except Exception:
-                    pass 
+                    detail_resp.raise_for_status()
+                    detail_soup = BeautifulSoup(detail_resp.text, "html.parser")
+                except Exception as detail_e:
+                    if not title_candidate.strip():
+                        self.logger.warning(f"NHK詳細ページ取得失敗 ({name}): {detail_e}")
+                else:
+                    if not title_candidate.strip():
+                        title_candidate = self._extract_title_from_detail(detail_soup, name)
+                        if not title_candidate.strip():
+                            self.logger.warning(f"NHKタイトル抽出失敗 ({name}): {full_url}")
+                    if not time_info or "-" not in time_info:
+                        time_info = self._extract_time_from_detail(detail_soup, time_info)
+
+            if not title_candidate.strip():
+                title_candidate = "(タイトル未取得)"
 
             results.append(Episode(
                 program_name=name,
