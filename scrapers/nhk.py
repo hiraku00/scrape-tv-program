@@ -29,18 +29,18 @@ class NHKScraper(BaseScraper):
             name = program["name"].replace("{year}", str(target_date.year))
             url = program["url"]
             channel = program["channel"]
-            
+
             eps = self._fetch_program(name, url, channel, target_date)
             total_elapsed = time.time() - global_start
-            
+
             status = f"{len(eps)}件" if eps else "対象なし"
             i = current_index + idx
             progress = f"{i}/{total_count}"
             self.logger.info(f"{progress:>5} {pad_text(name, 35)} {pad_text(status, 15)} 経過時間: {int(total_elapsed)}秒")
-            
+
             if eps:
                 all_episodes.extend(eps)
-            
+
         return all_episodes
 
     def _convert_to_24h_format(self, time_str: str) -> str:
@@ -58,22 +58,50 @@ class NHKScraper(BaseScraper):
     def _extract_title_from_anchor(self, a_tag, name: str) -> str:
         p_texts = [p.get_text(" ", strip=True) for p in a_tag.find_all("p")]
 
+        # NOTE: NHKの一覧では番組名の表記ゆれ（例: 半角'!' と全角'！'）があり、
+        #       そのまま番組名を削除すると空文字になってしまう場合がある。
+        #       対策: 句読点を正規化して比較し、<p>が番組名そのものなら番組名を返す。
+
+        def _normalize_punct(s: str) -> str:
+            if not s:
+                return s
+            # Normalize common ASCII punctuation to fullwidth to match NHK page text
+            return s.replace("!", "！").replace("?", "？").replace(":", "：").strip()
+
         # まず明確なタイトルっぽいテキストを取得
         for text in p_texts:
-            if not text or text == name:
+            if not text or _normalize_punct(text) == _normalize_punct(name):
                 continue
             if re.fullmatch(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日(?:.*)?", text):
                 continue
             if re.fullmatch(r"^『.*』の番組エピソードです$", text):
                 continue
-            if name in text and len(text) > len(name) + 2:
-                return text.replace(name, "").strip()
+            # If the program name appears in the text, remove it (consider punctuation variants)
+            try:
+                pattern = re.escape(name).replace("\\!", "[!！]")
+                cleaned = re.sub(pattern, "", text).strip()
+            except re.error:
+                cleaned = text.replace(name, "").strip()
+
+            if cleaned and len(cleaned) > 0:
+                return cleaned
             return text
 
         # 日付だけしかなければ日付をタイトル扱い
         for text in p_texts:
             if re.fullmatch(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日", text):
                 return text
+
+        # ここまでで候補が見つからなければ、表示されている<p>のいずれかが
+        # 番組名そのもの（句読点の差などを含む）か確認して、番組名を返す
+        def _normalize(s: str) -> str:
+            if not s:
+                return s
+            return s.replace("!", "！").replace("?", "？").replace(":", "：").strip()
+
+        for text in p_texts:
+            if _normalize(text) == _normalize(name):
+                return name
 
         return ""
 
@@ -129,6 +157,12 @@ class NHKScraper(BaseScraper):
             title_text = re.sub(r"\s*[-–—|｜]\s*NHK.*$", "", title_text)
             title_text = title_text.strip("「」『』 ")
 
+        # NOTE: 詳細ページから取得したタイトルが、番組名を剥がした結果空になる
+        #       ケースがある（表記ゆれや単純表記のため）。その場合は無理に空にせず
+        #       番組名をフォールバックとして返すことでタイトル欠落を防止する。
+        if not title_text:
+            return name
+
         return title_text
 
     def _extract_time_from_detail(self, dsoup, current_time_info: str) -> str:
@@ -165,7 +199,7 @@ class NHKScraper(BaseScraper):
             # 日付の抽出 (YYYY年M月D日 または M月D日)
             m_date = re.search(r"(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日", text)
             if not m_date: continue
-            
+
             y = int(m_date.group(1)) if m_date.group(1) else target_date.year
             m, d = int(m_date.group(2)), int(m_date.group(3))
             if datetime(y, m, d).date() != target_date.date(): continue
@@ -176,7 +210,7 @@ class NHKScraper(BaseScraper):
                 title_candidate = text
                 if "初回放送日" in text:
                     title_candidate = text.split("初回放送日")[0]
-                
+
                 # ノイズ除去
                 title_candidate = re.sub(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日.*$", "", title_candidate)
                 title_candidate = re.sub(r"^\s*(?:\d+時間\s*)?(?:\d+分\s*)?(?:\d+秒\s*)?", "", title_candidate)
