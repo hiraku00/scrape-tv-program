@@ -55,8 +55,9 @@ class NHKScraper(BaseScraper):
             return f"{h:02d}:{m_str}"
         return time_str
 
-    def _extract_title_from_anchor(self, a_tag, name: str) -> str:
+    def _extract_title_from_anchor(self, a_tag, name: str) -> tuple[str, str]:
         p_texts = [p.get_text(" ", strip=True) for p in a_tag.find_all("p")]
+        p_texts = [t for t in p_texts if t.strip()]  # 空文字のpタグを除外
 
         # NOTE: NHKの一覧では番組名の表記ゆれ（例: 半角'!' と全角'！'）があり、
         #       そのまま番組名を削除すると空文字になってしまう場合がある。
@@ -65,10 +66,32 @@ class NHKScraper(BaseScraper):
         def _normalize_punct(s: str) -> str:
             if not s:
                 return s
-            # Normalize common ASCII punctuation to fullwidth to match NHK page text
+            # 句読点を全角に正規化してNHKのテキストと一致しやすくする
             return s.replace("!", "！").replace("?", "？").replace(":", "：").strip()
 
-        # まず明確なタイトルっぽいテキストを取得
+        # 要素数が3つ以上の場合、通常は
+        # p[0]: 番組タイトル（サブタイトルやキャッチコピー等を含む）
+        # p[1]: 各回固有のエピソードタイトル
+        # p[2]: あらすじ・説明文
+        # となっているため、p[0]を番組名、p[1]をエピソードタイトルとして採用する。
+        if len(p_texts) >= 3:
+            prog_name_candidate = p_texts[0]
+            title_candidate = p_texts[1]
+            if (not re.fullmatch(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日(?:.*)?", title_candidate) and
+                not re.fullmatch(r"^『.*』の番組エピソードです$", title_candidate) and
+                _normalize_punct(title_candidate) != _normalize_punct(name)):
+                
+                # 必要に応じて番組名が含まれている場合は除去する
+                try:
+                    pattern = re.escape(name).replace("\\!", "[!！]")
+                    cleaned = re.sub(pattern, "", title_candidate).strip()
+                except re.error:
+                    cleaned = title_candidate.replace(name, "").strip()
+                
+                final_title = cleaned if (cleaned and len(cleaned) > 0) else title_candidate
+                return prog_name_candidate, final_title
+
+        # 要素数が2つ以下、または上記条件に該当しなかった場合は従来のロジックを実行
         for text in p_texts:
             if not text or _normalize_punct(text) == _normalize_punct(name):
                 continue
@@ -76,7 +99,7 @@ class NHKScraper(BaseScraper):
                 continue
             if re.fullmatch(r"^『.*』の番組エピソードです$", text):
                 continue
-            # If the program name appears in the text, remove it (consider punctuation variants)
+            # テキスト内に番組名が含まれている場合は除去する
             try:
                 pattern = re.escape(name).replace("\\!", "[!！]")
                 cleaned = re.sub(pattern, "", text).strip()
@@ -84,13 +107,13 @@ class NHKScraper(BaseScraper):
                 cleaned = text.replace(name, "").strip()
 
             if cleaned and len(cleaned) > 0:
-                return cleaned
-            return text
+                return name, cleaned
+            return name, text
 
         # 日付だけしかなければ日付をタイトル扱い
         for text in p_texts:
             if re.fullmatch(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日", text):
-                return text
+                return name, text
 
         # ここまでで候補が見つからなければ、表示されている<p>のいずれかが
         # 番組名そのもの（句読点の差などを含む）か確認して、番組名を返す
@@ -101,9 +124,9 @@ class NHKScraper(BaseScraper):
 
         for text in p_texts:
             if _normalize(text) == _normalize(name):
-                return name
+                return text, ""
 
-        return ""
+        return name, ""
 
     def _is_generic_detail_description(self, text: str) -> bool:
         if not text:
@@ -115,9 +138,66 @@ class NHKScraper(BaseScraper):
             return True
         return False
 
-    def _extract_title_from_detail(self, dsoup, name: str) -> str:
-        # 優先順序: og:description -> description -> og:title -> title -> h1
-        title_text = ""
+    def _extract_title_from_detail(self, dsoup, name: str) -> tuple[str, str]:
+        # og:title -> title -> h1 の順で取得し、エピソードタイトルと番組名に分解する
+        raw_title = ""
+        for selector in [
+            "meta[property='og:title']",
+            "meta[name='title']",
+        ]:
+            tag = dsoup.select_one(selector)
+            if tag:
+                raw_title = tag.get("content", "").strip()
+                if raw_title:
+                    break
+
+        if not raw_title:
+            title_tag = dsoup.select_one("title")
+            if title_tag:
+                raw_title = title_tag.get_text(" ", strip=True)
+
+        if not raw_title:
+            heading = dsoup.select_one("h1")
+            if heading:
+                raw_title = heading.get_text(" ", strip=True)
+
+        if raw_title:
+            # NHK表記などを除去
+            raw_title = re.sub(r"\s*[-–—|｜]\s*NHK.*$", "", raw_title)
+            # 区切り文字で分割
+            parts = re.split(r'\s*[-–—|｜]\s*', raw_title)
+            # 空文字やNHKなどを除外
+            parts = [p.strip() for p in parts if p.strip() and p.strip() not in ("NHK", "日本放送協会")]
+            
+            if len(parts) >= 2:
+                # 設定された番組名 name が含まれるパーツを探す
+                prog_part = None
+                title_part = None
+                def _norm(s: str) -> str:
+                    return s.replace("!", "！").replace("?", "？").replace(":", "：")
+                
+                for p in parts:
+                    if _norm(name) in _norm(p) or _norm(p) in _norm(name):
+                        prog_part = p
+                    else:
+                        title_part = p
+                
+                # 分離できたらそれを返す
+                if prog_part and title_part:
+                    return prog_part, title_part.strip("「」『』 ")
+                elif title_part:
+                    return name, title_part.strip("「」『』 ")
+                else:
+                    return parts[0], parts[0]
+            elif len(parts) == 1:
+                # 分割できなかった場合は、name を除いてタイトルとする
+                title_text = parts[0].replace(name, "").strip()
+                title_text = title_text.strip("「」『』 ")
+                if title_text:
+                    return name, title_text
+                return name, parts[0]
+
+        # description を最後の手段とする
         for selector in [
             "meta[property='og:description']",
             "meta[name='description']",
@@ -126,44 +206,9 @@ class NHKScraper(BaseScraper):
             if tag:
                 content = tag.get("content", "").strip()
                 if content and not self._is_generic_detail_description(content):
-                    title_text = content
-                    break
+                    return name, content[:50]
 
-        if not title_text:
-            for selector in [
-                "meta[property='og:title']",
-                "meta[name='title']",
-            ]:
-                tag = dsoup.select_one(selector)
-                if tag:
-                    title_text = tag.get("content", "").strip()
-                    if title_text:
-                        break
-
-        if not title_text:
-            title_tag = dsoup.select_one("title")
-            if title_tag:
-                title_text = title_tag.get_text(" ", strip=True)
-
-        if not title_text:
-            heading = dsoup.select_one("h1")
-            if heading:
-                title_text = heading.get_text(" ", strip=True)
-
-        if title_text:
-            title_text = title_text.replace(name, "").strip()
-            title_text = re.sub(r"^\s*[-–—|｜]\s*", "", title_text)
-            title_text = re.sub(r"\s*[-–—|｜]\s*$", "", title_text)
-            title_text = re.sub(r"\s*[-–—|｜]\s*NHK.*$", "", title_text)
-            title_text = title_text.strip("「」『』 ")
-
-        # NOTE: 詳細ページから取得したタイトルが、番組名を剥がした結果空になる
-        #       ケースがある（表記ゆれや単純表記のため）。その場合は無理に空にせず
-        #       番組名をフォールバックとして返すことでタイトル欠落を防止する。
-        if not title_text:
-            return name
-
-        return title_text
+        return name, ""
 
     def _extract_time_from_detail(self, dsoup, current_time_info: str) -> str:
         time_span = dsoup.select_one("div.f1vveb2x span.f1yrc8pc") or dsoup.select_one("p.f1yrc8pc")
@@ -178,7 +223,6 @@ class NHKScraper(BaseScraper):
         return current_time_info
 
     def _fetch_program(self, name: str, url: str, channel: str, target_date: datetime) -> List[Episode]:
-        # (中略) 一覧ページからの取得
         try:
             resp = requests.get(url, headers=self.HEADERS, timeout=self.TIMEOUT)
             resp.raise_for_status()
@@ -204,8 +248,8 @@ class NHKScraper(BaseScraper):
             m, d = int(m_date.group(2)), int(m_date.group(3))
             if datetime(y, m, d).date() != target_date.date(): continue
 
-            # タイトル抽出
-            title_candidate = self._extract_title_from_anchor(a_tag, name)
+            # タイトルと動的番組名の抽出
+            prog_name_detected, title_candidate = self._extract_title_from_anchor(a_tag, name)
             if not title_candidate:
                 title_candidate = text
                 if "初回放送日" in text:
@@ -216,6 +260,9 @@ class NHKScraper(BaseScraper):
                 title_candidate = re.sub(r"^\s*(?:\d+時間\s*)?(?:\d+分\s*)?(?:\d+秒\s*)?", "", title_candidate)
                 title_candidate = title_candidate.replace(name, "").strip()
                 title_candidate = title_candidate.strip("「」『』")
+
+            if not prog_name_detected:
+                prog_name_detected = name
 
             # 時間情報の抽出
             time_info = ""
@@ -260,7 +307,7 @@ class NHKScraper(BaseScraper):
                         self.logger.warning(f"NHK詳細ページ取得失敗 ({name}): {detail_e}")
                 else:
                     if not title_candidate.strip():
-                        title_candidate = self._extract_title_from_detail(detail_soup, name)
+                        prog_name_detected, title_candidate = self._extract_title_from_detail(detail_soup, name)
                         if not title_candidate.strip():
                             self.logger.warning(f"NHKタイトル抽出失敗 ({name}): {full_url}")
                     if not time_info or "-" not in time_info:
@@ -270,7 +317,7 @@ class NHKScraper(BaseScraper):
                 title_candidate = "(タイトル未取得)"
 
             results.append(Episode(
-                program_name=name,
+                program_name=prog_name_detected,
                 channel=channel,
                 title=title_candidate,
                 url=full_url,
