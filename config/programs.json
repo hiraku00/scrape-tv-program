@@ -22,6 +22,9 @@
         {"name": "ドキュメント20min.", "url": "https://www.web.nhk/tv/pl/series-tep-YN5YRJ9KP6", "channel": "NHK総合"},
         {"name": "未解決事件", "url": "https://www.web.nhk/tv/an/mikaiketsu/pl/series-tep-57615R8KYY", "channel": "NHK総合"}
     ],
+    "bstbs": [
+        {"name": "報道1930", "channel": "BS-TBS", "time": "19:30-20:54", "url": "https://bs.tbs.co.jp/houdou1930/archives/index.html"}
+    ],
     "tvtokyo": [
         {"name": "WBS", "channel": "テレ東", "time": "22:00-22:58", "urls": ["https://txbiz.tv-tokyo.co.jp/wbs/oa", "https://txbiz.tv-tokyo.co.jp/wbs/feature", "https://txbiz.tv-tokyo.co.jp/wbs/trend_tamago"]},
         {"name": "モーサテ", "channel": "テレ東", "time": "05:45-07:05", "urls": ["https://txbiz.tv-tokyo.co.jp/nms/special", "https://txbiz.tv-tokyo.co.jp/nms/smpfeature", "https://txbiz.tv-tokyo.co.jp/nms/feature"]},

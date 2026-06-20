@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from core.logger import setup_logger
 from scrapers.nhk import NHKScraper
+from scrapers.bstbs import BSTBSScraper
 from scrapers.tvtokyo import TVTokyoScraper
 from scrapers.twitter_scraper import TwitterScraper
 
@@ -20,20 +21,25 @@ def run_gather(target_date_str: str):
     global_start = time.time()
     
     episodes = []
-    total_count = len(config["nhk"]) + len(config["tvtokyo"]) + 1
+    total_count = len(config["nhk"]) + len(config["bstbs"]) + len(config["tvtokyo"]) + 1
     current_idx = 1
     
     # 1. NHK Web
     nhk_scraper = NHKScraper(config["nhk"])
     episodes.extend(nhk_scraper.scrape(target_date, global_start, current_idx, total_count))
     current_idx += len(config["nhk"])
+
+    # 2. BS-TBS Web
+    bstbs_scraper = BSTBSScraper(config["bstbs"])
+    episodes.extend(bstbs_scraper.scrape(target_date, global_start, current_idx, total_count))
+    current_idx += len(config["bstbs"])
     
-    # 2. TV Tokyo Web
+    # 3. TV Tokyo Web
     tv_scraper = TVTokyoScraper(config["tvtokyo"])
     episodes.extend(tv_scraper.scrape(target_date, global_start, current_idx, total_count))
     current_idx += len(config["tvtokyo"])
     
-    # 3. Twitter
+    # 4. Twitter
     twitter_scraper = TwitterScraper(config["twitter"])
     episodes.extend(twitter_scraper.scrape(target_date, global_start, current_idx, total_count))
     
