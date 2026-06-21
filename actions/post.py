@@ -165,6 +165,13 @@ def run_post(target_date_str: str):
         logger.warning("ファイルが空のため、投稿をスキップします。")
         return
 
+    # すでにファイルにヘッダーが含まれている場合は除去する
+    target_dt = datetime.strptime(target_date_str, "%Y%m%d")
+    weekday_ja = ["月", "火", "水", "木", "金", "土", "日"][target_dt.weekday()]
+    header = f"{target_dt.strftime('%y/%m/%d')}({weekday_ja})のニュース・ドキュメンタリー番組など\n\n"
+    if content.startswith(header):
+        content = content[len(header):].strip()
+
     # 番組ブロックごとに分割してツイートを組み立て
     blocks = content.split("\n\n")
     target_dt = datetime.strptime(target_date_str, "%Y%m%d")

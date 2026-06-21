@@ -109,7 +109,7 @@ def run_gather(target_date_str: str):
     if needs_split_backup:
         with open(before_split_file, "w", encoding="utf-8") as f:
             # 元の output_blocks (未分割) を書き出し
-            f.write("\n\n".join(output_blocks) + "\n")
+            f.write(overall_header + "\n\n".join(output_blocks) + "\n")
         logger.info(f"生データを保存しました: {before_split_file.name}")
     elif before_split_file.exists():
         # 分割が不要な場合は、前回の残骸があれば削除するか、.bak にリネーム
@@ -117,7 +117,7 @@ def run_gather(target_date_str: str):
 
     # 2. メインファイル（分割済み）を保存
     with open(out_file, "w", encoding="utf-8") as f:
-        f.write("\n\n".join(final_output_blocks) + "\n")
+        f.write(overall_header + "\n\n".join(final_output_blocks) + "\n")
         
     status_msg = f"{len(episodes)}件を {out_file.name} に保存しました"
     if needs_split_backup:
