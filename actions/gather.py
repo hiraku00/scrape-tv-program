@@ -118,7 +118,7 @@ def run_gather(target_date_str: str):
     # 2. メインファイル（分割済み）を保存
     with open(out_file, "w", encoding="utf-8") as f:
         f.write(overall_header + "\n\n".join(final_output_blocks) + "\n")
-        
+
     status_msg = f"{len(episodes)}件を {out_file.name} に保存しました"
     if needs_split_backup:
         status_msg += f" (自動分割実施。生データは {before_split_file.name})"

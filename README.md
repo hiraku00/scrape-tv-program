@@ -24,14 +24,24 @@ python main.py gather [20260507]
 - `output/YYYYMMDD.txt`: 投稿用ファイル。文字数制限を超える場合は自動で分割されます。
 - `output/YYYYMMDD.raw.txt`: 分割前の生データ。記録や再編集用に使用します。
 
-### 2. URLの確認
+### 2. Obsidianウォッチリストへの追記
+
+`gather` の結果を確認・編集した後、以下を実行するとObsidianのウォッチリストへ追加します。`raw.txt` がある場合は、分割前の内容を使います。
+
+```bash
+python main.py append [20260507]
+```
+
+Obsidianへの追加先は `/Users/hiraku/Obsidian/hiraku-local/04_watch-list/watch list (text, audio, movie).md` です。放送局名を `person`、番組名とエピソード名を改行で連結したものを `title`、収集日・種別・URLを対応する列へ記録します。同一番組の複数エピソードは1行にまとめ、同じURLは再追加しません。
+
+### 3. URLの確認
 取得したURLに間違いがないか、ブラウザで一括確認できます。
 （日付省略時は前日）
 ```bash
 python main.py open [20260507]
 ```
 
-### 3. Twitterへの投稿
+### 4. Twitterへの投稿
 `YYYYMMDD.txt` の内容を読み込み、自動で分割して投稿します。
 （日付省略時は前日）
 実行時にコンソール上で**投稿内容のプレビュー**が表示されます。
