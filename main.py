@@ -3,12 +3,14 @@ from datetime import datetime
 from actions.gather import run_gather
 from actions.post import run_post
 from actions.open import run_open
+from actions.append_watch_list import run_append_watch_list
 
 def print_help():
     print("""
 使用方法: python main.py [コマンド] [日付:YYYYMMDD] (日付省略時は前日)
 コマンド一覧:
   gather   - WebスクレイピングとTwitter情報収集を行い、結果をファイルに保存します。
+  append   - 収集済みの情報をObsidianのウォッチリストへ追記します。
   open     - 取得した情報に含まれるURLをブラウザで一括で開きます。
   post     - 取得した情報を整理してTwitterに投稿します（プレビュー付き）。
 """)
@@ -36,6 +38,8 @@ def main():
         
     if command == "gather":
         run_gather(target_date)
+    elif command == "append":
+        run_append_watch_list(target_date)
     elif command == "open":
         run_open(target_date)
     elif command == "post":
