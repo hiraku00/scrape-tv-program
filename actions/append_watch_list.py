@@ -4,16 +4,14 @@ from pathlib import Path
 
 from core.logger import setup_logger
 from core.models import Episode
-from core.obsidian import append_episodes_to_watch_list
+from core.watch_list_api import WatchListApiError, append_episodes_to_watch_list
 
 
 def run_append_watch_list(target_date_str: str):
-    """収集済みの番組情報をObsidianのウォッチリストへ追加する。"""
+    """収集済みの番組情報をwatch-list DBへ追加する。"""
     logger = setup_logger("append_watch_list")
     target_date = datetime.strptime(target_date_str, "%Y%m%d")
-    output_dir = Path(__file__).parent.parent / "output"
-    raw_file = output_dir / f"{target_date_str}.raw.txt"
-    output_file = raw_file if raw_file.exists() else output_dir / f"{target_date_str}.txt"
+    output_file = _resolve_output_file(target_date_str)
 
     if not output_file.exists():
         logger.error(f"追記対象の収集結果が見つかりません: {output_file}")
@@ -25,12 +23,33 @@ def run_append_watch_list(target_date_str: str):
         return
 
     try:
-        appended_count = append_episodes_to_watch_list(episodes, target_date)
-    except (OSError, ValueError) as e:
-        logger.error(f"Obsidianのウォッチリストへの追記に失敗しました: {e}")
+        result = append_episodes_to_watch_list(episodes, target_date.strftime("%Y-%m-%d"))
+    except (WatchListApiError, OSError, ValueError) as e:
+        logger.error(f"watch-list DBへの登録に失敗しました: {e}")
         return
 
-    logger.info(f"Obsidianのウォッチリストへ{appended_count}行を追加しました")
+    logger.info(
+        "watch-list DBへ%d件追加しました（重複スキップ%d件、エラー%d件）",
+        result["created"],
+        result["skipped"],
+        result["errors"],
+    )
+
+
+def _resolve_output_file(target_date_str: str) -> Path:
+    """対象日の出力ファイルを、直下と月別アーカイブから探す。"""
+    output_dir = Path(__file__).parent.parent / "output"
+    archive_dir = output_dir / target_date_str[2:6]
+    candidates = [
+        output_dir / f"{target_date_str}.raw.txt",
+        output_dir / f"{target_date_str}.txt",
+        archive_dir / f"{target_date_str}.raw.txt",
+        archive_dir / f"{target_date_str}.txt",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[1]
 
 
 def _parse_output(content: str) -> list[Episode]:
