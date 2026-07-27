@@ -24,15 +24,25 @@ python main.py gather [20260507]
 - `output/YYYYMMDD.txt`: 投稿用ファイル。文字数制限を超える場合は自動で分割されます。
 - `output/YYYYMMDD.raw.txt`: 分割前の生データ。記録や再編集用に使用します。
 
-### 2. Obsidianウォッチリストへの追記
+### 2. watch-list DBへの登録
 
-`gather` の結果を確認・編集した後、以下を実行するとObsidianのウォッチリストへ追加します。`raw.txt` がある場合は、分割前の内容を使います。
+`gather` の結果を確認・編集した後、以下を実行するとwatch-listのDBへ登録します。`raw.txt` がある場合は、分割前の内容を使います。`output/YYYYMMDD.*` がない場合は、`output/YYMM/YYYYMMDD.*` の月別アーカイブも参照します。
+
+事前に`.env`またはシェルの環境変数へwatch-list APIの接続情報を設定してください。
+
+```bash
+export WATCH_LIST_API_URL="https://your-watch-list.example.com"
+export WATCH_LIST_ACCESS_CLIENT_ID="..."
+export WATCH_LIST_ACCESS_CLIENT_SECRET="..."
+```
 
 ```bash
 python main.py append [20260507]
 ```
 
-Obsidianへの追加先は `/Users/hiraku/Obsidian/hiraku-local/04_watch-list/watch list (text, audio, movie).md` です。放送局名を `person`、番組名とエピソード名を改行で連結したものを `title`、収集日・種別・URLを対応する列へ記録します。同一番組の複数エピソードは1行にまとめ、同じURLは再追加しません。
+登録先はwatch-listの`POST /api/imports`です。番組名を「人物・媒体」、当日の放送内容を「タイトル」、放送局・時間を「内容・メモ」、番組ページをリンクとして登録します。リンク名はURLに応じて `NHK ONE` / `テレ東BIZ` / `BS-TBS` などに正規化されます。
+
+重複判定は `sourceSystem=tv-program` の `externalId` で行います。`externalId` には放送日と正規化URLを含めるため、同じアーカイブURLを複数の放送日で共有する番組も日付ごとに登録できます。
 
 ### 3. URLの確認
 取得したURLに間違いがないか、ブラウザで一括確認できます。

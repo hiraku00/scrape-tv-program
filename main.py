@@ -10,7 +10,7 @@ def print_help():
 使用方法: python main.py [コマンド] [日付:YYYYMMDD] (日付省略時は前日)
 コマンド一覧:
   gather   - WebスクレイピングとTwitter情報収集を行い、結果をファイルに保存します。
-  append   - 収集済みの情報をObsidianのウォッチリストへ追記します。
+  append   - 収集済みの情報をwatch-list DBへ登録します。
   open     - 取得した情報に含まれるURLをブラウザで一括で開きます。
   post     - 取得した情報を整理してTwitterに投稿します（プレビュー付き）。
 """)
