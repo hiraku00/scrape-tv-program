@@ -1,8 +1,8 @@
 import re
 import unicodedata
 
-# Twitterの文字数制限（半角280/全角140）
-TWEET_MAX_LENGTH = 280
+# X/Twitter の公称上限は 280 だが、API投稿で弾かれないよう安全マージンを取る
+TWEET_MAX_LENGTH = 276
 URL_CHAR_WEIGHT = 23
 
 def get_display_width(text: str) -> int:

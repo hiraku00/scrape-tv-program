@@ -4,6 +4,7 @@ import tweepy
 from pathlib import Path
 from datetime import datetime
 from core.logger import setup_logger
+from core.utils import TWEET_MAX_LENGTH, count_tweet_length, split_program_block
 from dotenv import load_dotenv
 
 def get_tweet_length(text):
@@ -182,14 +183,21 @@ def run_post(target_date_str: str):
     for i, block in enumerate(blocks):
         if not block.strip():
             continue
-            
-        # 最初の番組にのみヘッダーを付与
-        if i == 0:
-            tweet_text = header + block
+
+        header_to_consider = header if i == 0 else ""
+        if block.startswith("●") and count_tweet_length(header_to_consider + block) > TWEET_MAX_LENGTH:
+            tweet_blocks = split_program_block(block, header_to_consider)
         else:
-            tweet_text = block
-            
-        tweets.append(tweet_text.strip())
+            tweet_blocks = [block]
+
+        # 最初の番組にのみヘッダーを付与
+        for j, tweet_block in enumerate(tweet_blocks):
+            if i == 0 and j == 0:
+                tweet_text = header + tweet_block
+            else:
+                tweet_text = tweet_block
+
+            tweets.append(tweet_text.strip())
 
     # プレビュー表示
     logger.info(f"=== 投稿プレビュー (全 {len(tweets)} 件) ===")
@@ -235,4 +243,3 @@ def run_post(target_date_str: str):
         
     except Exception as e:
         logger.error(f"Twitter投稿予期せぬエラー: {e}")
-

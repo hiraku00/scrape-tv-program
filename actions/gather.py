@@ -65,7 +65,7 @@ def run_gather(target_date_str: str):
         key=lambda x: x[0][2].split('-')[0] if x[0][2] else "99:99"
     )
     
-    from core.utils import split_program_block, count_tweet_length
+    from core.utils import TWEET_MAX_LENGTH, split_program_block, count_tweet_length
     
     # 投稿用ヘッダー（日付）を考慮した分割
     target_dt = datetime.strptime(target_date_str, "%Y%m%d")
@@ -91,7 +91,7 @@ def run_gather(target_date_str: str):
         # 最初のブロックだけ全体のヘッダー長を考慮
         header_to_consider = overall_header if i == 0 else ""
         
-        if count_tweet_length(header_to_consider + block_text) > 280:
+        if count_tweet_length(header_to_consider + block_text) > TWEET_MAX_LENGTH:
             split_sub_blocks = split_program_block(block_text, header_to_consider)
             final_output_blocks.extend(split_sub_blocks)
             needs_split_backup = True
