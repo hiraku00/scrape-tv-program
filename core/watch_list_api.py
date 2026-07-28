@@ -71,8 +71,8 @@ def _to_api_items(episodes: Iterable[Episode], target_date: str) -> list[dict]:
         items.append(
             {
                 "contentType": "movie",
-                "creatorName": episode.program_name,
-                "seriesTitle": "",
+                "creatorName": _media_name(episode.channel),
+                "seriesTitle": episode.program_name,
                 "title": episode.title,
                 "description": " ".join(
                     value for value in (episode.channel, episode.broadcast_time) if value
@@ -88,6 +88,12 @@ def _to_api_items(episodes: Iterable[Episode], target_date: str) -> list[dict]:
             }
         )
     return items
+
+
+def _media_name(channel: str) -> str:
+    if channel.startswith("NHK"):
+        return "NHK"
+    return channel
 
 
 def _fetch_existing_external_ids(base_url: str) -> set[str]:
