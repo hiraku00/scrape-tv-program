@@ -240,6 +240,14 @@ class NHKScraper(BaseScraper):
             if "/ep/" not in href or href in seen_urls:
                 continue
 
+            # NHKページ内の「次回予告」的なプロモーションリンクを除外する
+            # (例: "👉次回はM月D日放送「〇〇」です")
+            # これらは実際のエピソード一覧項目と同じURLを指すが、DOM上で
+            # 一覧項目より先に出現するため、正しく処理しないと seen_urls による
+            # 重複排除で本来のエピソード情報がスキップされてしまう。
+            if "次回は" in text and "初回放送日" not in text:
+                continue
+
             # 日付の抽出 (YYYY年M月D日 または M月D日)
             m_date = re.search(r"(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日", text)
             if not m_date: continue
