@@ -53,7 +53,7 @@ def _resolve_output_file(target_date_str: str) -> Path:
 
 
 def _parse_output(content: str) -> list[Episode]:
-    """gatherが生成したテキストをEpisodeのリストへ戻す。"""
+    """gatherが生成した（手編集された場合も含む）テキストをEpisodeのリストへ戻す。"""
     episodes = []
     current_program = None
     current_channel = ""

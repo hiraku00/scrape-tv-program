@@ -1,9 +1,14 @@
 import re
 import unicodedata
+from datetime import datetime
+from typing import List, Tuple
+
+from core.models import Episode
 
 # X/Twitter の公称上限は 280 だが、API投稿で弾かれないよう安全マージンを取る
 TWEET_MAX_LENGTH = 276
 URL_CHAR_WEIGHT = 23
+WEEKDAY_JA = ["月", "火", "水", "木", "金", "土", "日"]
 
 def get_display_width(text: str) -> int:
     """文字列の表示幅（全角2、半角1）を計算する"""
@@ -23,6 +28,19 @@ def count_tweet_length(text: str) -> int:
     text_length = get_display_width(text_without_urls)
     total_length = text_length + (URL_CHAR_WEIGHT * len(urls))
     return total_length
+
+def convert_jp_ampm_to_24h(time_str: str) -> str:
+    """「午前/午後」表記の時刻を24時間表記に変換する（変換できなければそのまま返す）"""
+    m = re.match(r"(午前|午後)(\d{1,2}):(\d{2})", time_str.strip())
+    if not m:
+        return time_str
+    ampm, h, m_str = m.group(1), int(m.group(2)), m.group(3)
+    if ampm == "午後" and h < 12:
+        h += 12
+    elif ampm == "午前" and h == 12:
+        h = 0
+    return f"{h:02d}:{m_str}"
+
 
 def pad_text(text: str, target_width: int) -> str:
     """表示幅に合わせてスペースでパディングする"""
@@ -68,5 +86,62 @@ def split_program_block(block_text: str, header_text: str = "") -> list[str]:
             
     if current_content:
         split_tweets.append(current_content.strip())
-        
+
     return split_tweets
+
+
+def build_header(target_dt: datetime) -> str:
+    """投稿・出力の先頭に付ける日付ヘッダーを生成する"""
+    weekday_ja = WEEKDAY_JA[target_dt.weekday()]
+    return f"{target_dt.strftime('%y/%m/%d')}({weekday_ja})のニュース・ドキュメンタリー番組など\n\n"
+
+
+def group_and_sort_episodes(episodes: List[Episode]) -> List[Tuple[Tuple[str, str, str], List[Episode]]]:
+    """番組名・チャンネル・放送時間でグループ化し、放送時間の昇順に並べる"""
+    grouped: dict[Tuple[str, str, str], List[Episode]] = {}
+    for ep in episodes:
+        key = (ep.program_name, ep.channel, ep.broadcast_time)
+        bucket = grouped.setdefault(key, [])
+        # 同じURLのエピソードは追加しない（重複排除）
+        if any(e.url == ep.url for e in bucket):
+            continue
+        bucket.append(ep)
+
+    return sorted(
+        grouped.items(),
+        key=lambda x: x[0][2].split('-')[0] if x[0][2] else "99:99"
+    )
+
+
+def build_blocks(
+    sorted_items: List[Tuple[Tuple[str, str, str], List[Episode]]],
+    overall_header: str,
+) -> Tuple[List[str], List[str], bool]:
+    """番組ごとのブロックを生成し、必要に応じて文字数制限で分割する
+
+    戻り値: (分割前の生ブロック一覧, 分割後の最終ブロック一覧, 分割を実施したか)
+    """
+    raw_blocks = []
+    final_blocks = []
+    needs_split = False
+
+    for i, ((name, channel, time), eps) in enumerate(sorted_items):
+        time_str = f" {time}" if time else ""
+        header = f"●{name}({channel}{time_str})"
+        block_lines = [header]
+        for ep in eps:
+            block_lines.append(f"・{ep.title}")
+            block_lines.append(ep.url)
+        block_text = "\n".join(block_lines)
+        raw_blocks.append(block_text)
+
+        # 最初のブロックだけ全体のヘッダー長を考慮
+        header_to_consider = overall_header if i == 0 else ""
+
+        if count_tweet_length(header_to_consider + block_text) > TWEET_MAX_LENGTH:
+            final_blocks.extend(split_program_block(block_text, header_to_consider))
+            needs_split = True
+        else:
+            final_blocks.append(block_text)
+
+    return raw_blocks, final_blocks, needs_split

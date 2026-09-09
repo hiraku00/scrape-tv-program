@@ -1,48 +1,23 @@
 import json
 import re
 import requests
+import traceback
 from datetime import datetime
 from typing import List
 
 from core.models import Episode
 from scrapers.base import BaseScraper
-from core.utils import pad_text
 
 class TVTokyoScraper(BaseScraper):
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-    }
-    TIMEOUT = 10
-
-    def __init__(self, config: list):
-        super().__init__()
-        self.config = config
-
     def scrape(self, target_date: datetime, global_start: float, current_index: int = 1, total_count: int = 1) -> List[Episode]:
-        all_episodes = []
-        import time
-        for idx, program in enumerate(self.config):
-            name = program["name"]
-            channel = program["channel"]
-            time_info = program["time"]
-            urls = program["urls"]
-            
-            eps = self._fetch_program(name, urls, channel, time_info, target_date)
-            total_elapsed = time.time() - global_start
-            
-            status = f"{len(eps)}件" if eps else "対象なし"
-            i = current_index + idx
-            progress = f"{i}/{total_count}"
-            self.logger.info(f"{progress:>5} {pad_text(name, 35)} {pad_text(status, 15)} 経過時間: {int(total_elapsed)}秒")
-            
-            if eps:
-                all_episodes.extend(eps)
-            
-        return all_episodes
+        def fetch_fn(program: dict) -> List[Episode]:
+            return self._fetch_program(
+                program["name"], program["urls"], program["channel"], program["time"], target_date
+            )
+
+        return self._scrape_programs(
+            target_date, global_start, current_index, total_count, lambda p: p["name"], fetch_fn
+        )
 
     def _fetch_program(self, name: str, urls: List[str], channel: str, config_time: str, target_date: datetime) -> List[Episode]:
         results = []
@@ -119,7 +94,6 @@ class TVTokyoScraper(BaseScraper):
                         ))
             except Exception as e:
                 self.logger.error(f"TV東京リクエストエラー ({name} - {list_url}): {e}")
-                import traceback
                 self.logger.debug(traceback.format_exc())
 
         return results

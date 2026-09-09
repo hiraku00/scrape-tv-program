@@ -1,59 +1,26 @@
 import re
 import requests
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List
 
 from core.models import Episode
 from scrapers.base import BaseScraper
-from core.utils import pad_text
+from core.utils import convert_jp_ampm_to_24h
 
 class NHKScraper(BaseScraper):
-    HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8",
-        "Accept-Encoding": "gzip, deflate, br",
-        "Connection": "keep-alive",
-    }
-    TIMEOUT = 10
-
-    def __init__(self, config: list):
-        super().__init__()
-        self.config = config
-
     def scrape(self, target_date: datetime, global_start: float, current_index: int = 1, total_count: int = 1) -> List[Episode]:
-        all_episodes = []
-        import time
-        for idx, program in enumerate(self.config):
-            name = program["name"].replace("{year}", str(target_date.year))
-            url = program["url"]
-            channel = program["channel"]
+        def name_fn(program: dict) -> str:
+            return program["name"].replace("{year}", str(target_date.year))
 
-            eps = self._fetch_program(name, url, channel, target_date)
-            total_elapsed = time.time() - global_start
+        def fetch_fn(program: dict) -> List[Episode]:
+            name = name_fn(program)
+            return self._fetch_program(name, program["url"], program["channel"], target_date)
 
-            status = f"{len(eps)}件" if eps else "対象なし"
-            i = current_index + idx
-            progress = f"{i}/{total_count}"
-            self.logger.info(f"{progress:>5} {pad_text(name, 35)} {pad_text(status, 15)} 経過時間: {int(total_elapsed)}秒")
-
-            if eps:
-                all_episodes.extend(eps)
-
-        return all_episodes
+        return self._scrape_programs(target_date, global_start, current_index, total_count, name_fn, fetch_fn)
 
     def _convert_to_24h_format(self, time_str: str) -> str:
-        # (変更なし)
-        m = re.match(r"(午前|午後)(\d{1,2}):(\d{2})", time_str.strip())
-        if m:
-            ampm, h, m_str = m.group(1), int(m.group(2)), m.group(3)
-            if ampm == "午後" and h < 12:
-                h += 12
-            elif ampm == "午前" and h == 12:
-                h = 0
-            return f"{h:02d}:{m_str}"
-        return time_str
+        return convert_jp_ampm_to_24h(time_str)
 
     def _extract_title_from_anchor(self, a_tag, name: str) -> tuple[str, str]:
         p_texts = [p.get_text(" ", strip=True) for p in a_tag.find_all("p")]
@@ -296,7 +263,6 @@ class NHKScraper(BaseScraper):
                 duration_min += int(m_match.group(1))
 
             if start_time_dt and duration_min > 0:
-                from datetime import timedelta
                 end_time_dt = start_time_dt + timedelta(minutes=duration_min)
                 time_info = f"{start_time_dt.strftime('%H:%M')}-{end_time_dt.strftime('%H:%M')}"
 
