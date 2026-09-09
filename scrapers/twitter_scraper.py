@@ -2,27 +2,25 @@ import os
 import tweepy
 import time
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List
 
 from dotenv import load_dotenv
 from core.models import Episode
 from scrapers.base import BaseScraper
-from core.utils import pad_text
+from core.utils import pad_text, convert_jp_ampm_to_24h
 
 class TwitterScraper(BaseScraper):
     def __init__(self, config: dict):
-        super().__init__()
-        self.config = config
+        super().__init__(config)
         load_dotenv()
         self.bearer_token = os.getenv("BEARER_TOKEN")
-        
+
     def scrape(self, target_date: datetime, global_start: float, current_index: int = 1, total_count: int = 1) -> List[Episode]:
         if not self.bearer_token:
             self.logger.error("BEARER_TOKENが設定されていません")
             return []
-            
-        import time
+
         user = self.config.get("user")
         programs = self.config.get("programs", [])
         
@@ -47,7 +45,7 @@ class TwitterScraper(BaseScraper):
             
             # Twitter API v2 の start_time / end_time は UTC
             # Twitter API v2 (Free/Basic) は直近7日間（168時間）しか検索できないためガードを入れる
-            now_utc = datetime.utcnow()
+            now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
             seven_days_ago_utc = now_utc - timedelta(hours=167, minutes=50) # 余裕を持って167時間50分前
             
             # JSTの 00:00:00 〜 23:59:59 は UTCの 前日15:00:00 〜 当日14:59:59
@@ -154,10 +152,4 @@ class TwitterScraper(BaseScraper):
         return results
 
     def _convert_to_24h(self, time_str: str) -> str:
-        m = re.match(r"(午前|午後)(\d{1,2}):(\d{2})", time_str.strip())
-        if m:
-            ampm, h, m_str = m.group(1), int(m.group(2)), m.group(3)
-            if ampm == "午後" and h < 12: h += 12
-            elif ampm == "午前" and h == 12: h = 0
-            return f"{h:02d}:{m_str}"
-        return time_str
+        return convert_jp_ampm_to_24h(time_str)

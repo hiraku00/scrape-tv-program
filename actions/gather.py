@@ -1,8 +1,10 @@
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from core.logger import setup_logger
+from core.utils import build_header, build_blocks, group_and_sort_episodes
 from scrapers.nhk import NHKScraper
 from scrapers.bstbs import BSTBSScraper
 from scrapers.tvtokyo import TVTokyoScraper
@@ -17,7 +19,6 @@ def run_gather(target_date_str: str):
         config = json.load(f)
         
     logger.info(f"=== 情報収集開始 ({target_date_str}) ===")
-    import time
     global_start = time.time()
     
     episodes = []
@@ -47,64 +48,20 @@ def run_gather(target_date_str: str):
         logger.warning("取得できたエピソードはありませんでした。")
         return
         
-    # 重複排除とグループ化
-    grouped = {}
-    for ep in episodes:
-        # キー: (番組名, チャンネル, 放送時間)
-        key = (ep.program_name, ep.channel, ep.broadcast_time)
-        if key not in grouped:
-            grouped[key] = []
-        # 同じURLのエピソードは追加しない（重複排除）
-        if any(e.url == ep.url for e in grouped[key]):
-            continue
-        grouped[key].append(ep)
-        
-    # 放送時間の昇順でソート（時間が空の場合は最後に配置）
-    sorted_items = sorted(
-        grouped.items(),
-        key=lambda x: x[0][2].split('-')[0] if x[0][2] else "99:99"
-    )
-    
-    from core.utils import TWEET_MAX_LENGTH, split_program_block, count_tweet_length
-    
-    # 投稿用ヘッダー（日付）を考慮した分割
+    # 重複排除とグループ化、放送時間の昇順でソート（時間が空の場合は最後に配置）
+    sorted_items = group_and_sort_episodes(episodes)
+
     target_dt = datetime.strptime(target_date_str, "%Y%m%d")
-    weekday_ja = ["月", "火", "水", "木", "金", "土", "日"][target_dt.weekday()]
-    overall_header = f"{target_dt.strftime('%y/%m/%d')}({weekday_ja})のニュース・ドキュメンタリー番組など\n\n"
-    
-    output_blocks = [] # 分割前の生ブロックを保持
-    final_output_blocks = []
-    needs_split_backup = False
-    
-    # 1. 各番組ごとのブロックを生成
-    for i, ((name, channel, time), eps) in enumerate(sorted_items):
-        time_str = f" {time}" if time else ""
-        header = f"●{name}({channel}{time_str})"
-        block_lines = [header]
-        for ep in eps:
-            block_lines.append(f"・{ep.title}")
-            block_lines.append(ep.url)
-        block_text = "\n".join(block_lines)
-        output_blocks.append(block_text)
-        
-        # 2. 分割が必要かチェック
-        # 最初のブロックだけ全体のヘッダー長を考慮
-        header_to_consider = overall_header if i == 0 else ""
-        
-        if count_tweet_length(header_to_consider + block_text) > TWEET_MAX_LENGTH:
-            split_sub_blocks = split_program_block(block_text, header_to_consider)
-            final_output_blocks.extend(split_sub_blocks)
-            needs_split_backup = True
-        else:
-            final_output_blocks.append(block_text)
-        
+    overall_header = build_header(target_dt)
+
+    output_blocks, final_output_blocks, needs_split_backup = build_blocks(sorted_items, overall_header)
+
     out_dir = Path(__file__).parent.parent / "output"
     out_dir.mkdir(exist_ok=True)
-    
-    # メインファイルとバックアップファイルのパス
+
     out_file = out_dir / f"{target_date_str}.txt"
     before_split_file = out_dir / f"{target_date_str}.raw.txt"
-    
+
     # 1. まず「分割前の生データ」を保存（常に最新の生データを保持）
     if needs_split_backup:
         with open(before_split_file, "w", encoding="utf-8") as f:
