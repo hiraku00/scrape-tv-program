@@ -42,7 +42,10 @@ def append_episodes_to_watch_list(
         item for item in candidates
         if (
             item["externalId"] not in existing_external_ids
-            and _canonical_url(item["links"][0]["url"]) not in existing_external_ids
+            and (
+                not item["links"]
+                or _canonical_url(item["links"][0]["url"]) not in existing_external_ids
+            )
         )
     ]
     skipped = len(candidates) - len(filtered)
@@ -62,12 +65,14 @@ def append_episodes_to_watch_list(
 
 def _to_api_items(episodes: Iterable[Episode], target_date: str) -> list[dict]:
     items = []
-    seen_urls = set()
+    seen_keys = set()
     for episode in episodes:
         canonical = _canonical_url(episode.url)
-        if not canonical or canonical in seen_urls:
+        # URLが無い番組は番組名・タイトル・放送時刻の組で重複判定する。
+        key = canonical or f"{episode.program_name}|{episode.title}|{episode.broadcast_time}"
+        if key in seen_keys:
             continue
-        seen_urls.add(canonical)
+        seen_keys.add(key)
         items.append(
             {
                 "contentType": "movie",
@@ -81,10 +86,13 @@ def _to_api_items(episodes: Iterable[Episode], target_date: str) -> list[dict]:
                 "addedOn": target_date,
                 "sourceSystem": "tv-program",
                 # 同じアーカイブURLを複数の放送日が共有する場合があるため、
-                # 放送日を含めてエピソード単位のIDにする。
-                "externalId": f"{target_date}:{canonical}",
+                # 放送日を含めてエピソード単位のIDにする。URLが無い場合は番組名+タイトルで代用する。
+                "externalId": f"{target_date}:{key}",
                 "rawSource": json.dumps(asdict(episode), ensure_ascii=False),
-                "links": [{"label": _link_label(episode.url), "url": episode.url, "linkType": "reference"}],
+                "links": (
+                    [{"label": _link_label(episode.url), "url": episode.url, "linkType": "reference"}]
+                    if canonical else []
+                ),
             }
         )
     return items
