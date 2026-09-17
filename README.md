@@ -40,9 +40,9 @@ export WATCH_LIST_ACCESS_CLIENT_SECRET="..."
 python main.py append [20260507]
 ```
 
-登録先はwatch-listの`POST /api/imports`です。放送局を正規化した媒体名（`NHK` / `テレ東` / `BS-TBS` など）を「人物・媒体」、番組名を「番組・連載名」、当日の放送内容を「タイトル」、放送局・時間を「内容・メモ」、番組ページをリンクとして登録します。リンク名はURLに応じて `NHK ONE` / `テレ東BIZ` / `BS-TBS` などに正規化されます。
+登録先はwatch-listの`POST /api/imports`です。放送局を正規化した媒体名（`NHK` / `テレ東` / `BS-TBS` など）を「人物・媒体」、番組名を「番組・連載名」、当日の放送内容を「タイトル」、放送局・時間を「内容・メモ」、番組ページをリンクとして登録します。リンク名はURLに応じて `NHK ONE` / `テレ東BIZ` / `BS-TBS` などに正規化されます。番組ページのURLが無いタイトル（アーカイブ非公開の番組など）もリンク無しで登録されます。
 
-重複判定は `sourceSystem=tv-program` の `externalId` で行います。`externalId` には放送日と正規化URLを含めるため、同じアーカイブURLを複数の放送日で共有する番組も日付ごとに登録できます。
+重複判定は `sourceSystem=tv-program` の `externalId` で行います。`externalId` には放送日と正規化URLを含めるため、同じアーカイブURLを複数の放送日で共有する番組も日付ごとに登録できます。URLが無い場合は放送日・番組名・タイトル・放送時間の組で重複判定します。
 
 ### 3. URLの確認
 取得したURLに間違いがないか、ブラウザで一括確認できます。

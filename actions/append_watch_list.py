@@ -62,9 +62,25 @@ def _parse_output(content: str) -> list[Episode]:
 
     for line in content.splitlines():
         if line.startswith("●"):
+            if pending_title:
+                episodes.append(Episode(
+                    program_name=current_program,
+                    channel=current_channel,
+                    title=pending_title,
+                    url="",
+                    broadcast_time=current_time,
+                ))
             current_program, current_channel, current_time = _parse_program_header(line)
             pending_title = None
         elif line.startswith("・"):
+            if pending_title:
+                episodes.append(Episode(
+                    program_name=current_program,
+                    channel=current_channel,
+                    title=pending_title,
+                    url="",
+                    broadcast_time=current_time,
+                ))
             pending_title = line[1:].strip()
         elif pending_title and line.startswith(("http://", "https://")):
             episodes.append(Episode(
@@ -75,6 +91,15 @@ def _parse_output(content: str) -> list[Episode]:
                 broadcast_time=current_time,
             ))
             pending_title = None
+
+    if pending_title:
+        episodes.append(Episode(
+            program_name=current_program,
+            channel=current_channel,
+            title=pending_title,
+            url="",
+            broadcast_time=current_time,
+        ))
 
     return episodes
 
