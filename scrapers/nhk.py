@@ -227,7 +227,12 @@ class NHKScraper(BaseScraper):
             prog_name_detected, title_candidate = self._extract_title_from_anchor(a_tag, name)
             if not title_candidate:
                 title_candidate = text
-                if "初回放送日" in text:
+                # プロモーションリンク (例: "👉10月1日(木)にアンコール放送「〇〇」決定！")
+                # は日付以降を削るとタイトルが消えるため、「」内をタイトルとして採用する
+                m_promo = re.search(r"放送「(.+?)」", text)
+                if m_promo and "初回放送日" not in text:
+                    title_candidate = m_promo.group(1)
+                elif "初回放送日" in text:
                     title_candidate = text.split("初回放送日")[0]
 
                 # ノイズ除去
