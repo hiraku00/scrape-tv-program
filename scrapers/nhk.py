@@ -1,3 +1,4 @@
+import json
 import re
 import requests
 from bs4 import BeautifulSoup
@@ -189,6 +190,61 @@ class NHKScraper(BaseScraper):
             return self._convert_to_24h_format(time_text)
         return current_time_info
 
+    def _parse_rsc_objects(self, html: str) -> list:
+        # Next.js が self.__next_f.push([1,"..."]) で埋め込む RSC ペイロードを JSON オブジェクト列に復元する
+        chunks = re.findall(r'self\.__next_f\.push\(\[1,"((?:[^"\\]|\\.)*)"\]\)', html)
+        try:
+            payload = "".join(json.loads('"' + c + '"') for c in chunks)
+        except ValueError:
+            return []
+        objs = []
+        for line in payload.split("\n"):
+            m = re.match(r"^[0-9a-f]+:([\[{].*)$", line)
+            if not m:
+                continue
+            try:
+                objs.append(json.loads(m.group(1)))
+            except ValueError:
+                pass
+        return objs
+
+    def _extract_event_times(self, html: str, target_date: datetime) -> dict[str, str]:
+        # 再放送(アンコール)は一覧の表示テキストに初回放送日しか出ないため、
+        # 埋め込みJSON内の各エピソードの detailedRecentEvent / detailedComingEvent から放送日時を拾う。
+        # 戻り値: {エピソードID: "HH:MM-HH:MM"}（target_date に放送があるもののみ）
+        date_str = target_date.strftime("%Y-%m-%d")
+        candidates = {}  # 開始日時 -> [(エピソードID, "HH:MM-HH:MM", 放送済み確定か)]
+
+        def walk(o):
+            if isinstance(o, dict):
+                ep_id = o.get("id")
+                if ep_id and ("detailedRecentEvent" in o or "detailedComingEvent" in o):
+                    events = {}
+                    for key in ("detailedRecentEvent", "detailedComingEvent"):
+                        ev = o.get(key) or {}
+                        start, end = ev.get("startDate", ""), ev.get("endDate", "")
+                        if start.startswith(date_str) and end:
+                            confirmed = key == "detailedRecentEvent" or events.get(start, ("", False))[1]
+                            events[start] = (end, confirmed)
+                    for start, (end, confirmed) in events.items():
+                        candidates.setdefault(start, []).append((ep_id, f"{start[11:16]}-{end[11:16]}", confirmed))
+                for v in o.values():
+                    walk(v)
+            elif isinstance(o, list):
+                for v in o:
+                    walk(v)
+
+        for obj in self._parse_rsc_objects(html):
+            walk(obj)
+
+        times = {}
+        for entries in candidates.values():
+            # 同じ枠を複数エピソードが主張する場合（差し替え前の古い予定が残っている等）は放送済み確定のものを優先する
+            confirmed = [e for e in entries if e[2]]
+            for ep_id, time_info, _ in (confirmed or entries):
+                times[ep_id] = time_info
+        return times
+
     def _fetch_program(self, name: str, url: str, channel: str, target_date: datetime) -> List[Episode]:
         try:
             resp = requests.get(url, headers=self.HEADERS, timeout=self.TIMEOUT)
@@ -198,8 +254,10 @@ class NHKScraper(BaseScraper):
             return []
 
         soup = BeautifulSoup(resp.text, "html.parser")
+        rerun_times = self._extract_event_times(resp.text, target_date)
         results = []
         seen_urls = set()
+        seen_ep_ids = set()
 
         for a_tag in soup.find_all("a", href=True):
             text = a_tag.get_text(" ", strip=True)
@@ -215,13 +273,23 @@ class NHKScraper(BaseScraper):
             if "次回は" in text and "初回放送日" not in text:
                 continue
 
+            full_url = href if href.startswith("http") else "https://www.web.nhk" + href
+            # 再放送の場合、一覧テキストには初回放送日しか載らないため埋め込みJSON側の放送時間を使う
+            ep_id = full_url.rstrip("/").rsplit("/", 1)[-1]
+            rerun_time = rerun_times.get(ep_id) if "初回放送日" in text else None
+
             # 日付の抽出 (YYYY年M月D日 または M月D日)
             m_date = re.search(r"(?:(\d{4})年)?(\d{1,2})月(\d{1,2})日", text)
-            if not m_date: continue
-
-            y = int(m_date.group(1)) if m_date.group(1) else target_date.year
-            m, d = int(m_date.group(2)), int(m_date.group(3))
-            if datetime(y, m, d).date() != target_date.date(): continue
+            if m_date:
+                y = int(m_date.group(1)) if m_date.group(1) else target_date.year
+                m, d = int(m_date.group(2)), int(m_date.group(3))
+                date_matched = datetime(y, m, d).date() == target_date.date()
+            else:
+                date_matched = False
+            if date_matched:
+                rerun_time = None
+            elif not rerun_time or ep_id in seen_ep_ids:
+                continue
 
             # タイトルと動的番組名の抽出
             prog_name_detected, title_candidate = self._extract_title_from_anchor(a_tag, name)
@@ -271,8 +339,11 @@ class NHKScraper(BaseScraper):
                 end_time_dt = start_time_dt + timedelta(minutes=duration_min)
                 time_info = f"{start_time_dt.strftime('%H:%M')}-{end_time_dt.strftime('%H:%M')}"
 
-            full_url = href if href.startswith("http") else "https://www.web.nhk" + href
+            if rerun_time:
+                time_info = rerun_time
+
             seen_urls.add(href)
+            seen_ep_ids.add(ep_id)
 
             # 一覧でタイトルが取得できない、あるいは時間情報が不十分な場合、詳細ページへアクセス
             detail_soup = None

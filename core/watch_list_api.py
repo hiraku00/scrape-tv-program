@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import ssl
 from dataclasses import asdict
 from typing import Iterable
@@ -38,13 +39,21 @@ def append_episodes_to_watch_list(
     # 番組アーカイブURLは複数放送日で共有されることがあるため、
     # tv-programのexternalIdだけで重複判定する。
     existing_external_ids = _fetch_existing_external_ids(base_url)
+    # 回ごとに固有なURLは、再放送で別の日に再登場しても同じ回なので日付を問わず重複扱いにする。
+    existing_episode_urls = {
+        _episode_unique_key(_strip_date_prefix(external_id))
+        for external_id in existing_external_ids
+    } - {""}
     filtered = [
         item for item in candidates
         if (
             item["externalId"] not in existing_external_ids
             and (
                 not item["links"]
-                or _canonical_url(item["links"][0]["url"]) not in existing_external_ids
+                or (
+                    _canonical_url(item["links"][0]["url"]) not in existing_external_ids
+                    and _episode_unique_key(item["links"][0]["url"]) not in existing_episode_urls
+                )
             )
         )
     ]
@@ -192,6 +201,29 @@ def _canonical_url(value: str) -> str:
         return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), ""))
     except ValueError:
         return ""
+
+
+def _strip_date_prefix(external_id: str) -> str:
+    """"YYYY-MM-DD:" で始まるexternalIdから日付部分を除く。"""
+    return re.sub(r"^\d{4}-\d{2}-\d{2}:", "", external_id)
+
+
+def _episode_unique_key(value: str) -> str:
+    """URLが1回の放送(エピソード)に固有なら比較用キーを返し、そうでなければ空文字を返す。
+
+    報道1930のアーカイブ一覧URLのように複数の放送日で共有されるURLは対象外とし、
+    従来どおり放送日込みのexternalIdで判定する。
+    """
+    canonical = _canonical_url(value)
+    if not canonical:
+        return ""
+    parts = urlsplit(canonical)
+    host = parts.netloc.lower().split(":", 1)[0]
+    path = parts.path.rstrip("/")
+    # NHK ONE: .../ep/<エピソードID>
+    if (host == "www.web.nhk" or host.endswith(".web.nhk")) and re.search(r"/ep/[A-Za-z0-9]+$", path):
+        return f"{host}{path}"
+    return ""
 
 
 def _link_label(value: str) -> str:

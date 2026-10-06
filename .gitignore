@@ -23,6 +23,8 @@ Thumbs.db
 
 # Project specific
 *.log
+# 手動バックアップした出力ファイル
+output/bk*
 
 # Editor settings
 .vscode/
