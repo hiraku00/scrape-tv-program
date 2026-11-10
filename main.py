@@ -1,4 +1,4 @@
-import sys
+git addimport sys
 from datetime import datetime
 from actions.gather import run_gather
 from actions.post import run_post
@@ -19,9 +19,9 @@ def main():
     if len(sys.argv) < 2:
         print_help()
         sys.exit(1)
-        
+
     command = sys.argv[1]
-    
+
     if len(sys.argv) >= 3:
         target_date = sys.argv[2]
     else:
@@ -29,13 +29,13 @@ def main():
         from datetime import timedelta
         target_date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")
         print(f"INFO: 日付が指定されていないため、前日の日付 ({target_date}) を使用します。")
-    
+
     try:
         datetime.strptime(target_date, "%Y%m%d")
     except ValueError:
         print(f"エラー: 日付の形式が正しくありません: {target_date} (例: 20260501)")
         sys.exit(1)
-        
+
     if command == "gather":
         run_gather(target_date)
     elif command == "append":
