@@ -1,4 +1,4 @@
-git addimport sys
+import sys
 from datetime import datetime
 from actions.gather import run_gather
 from actions.post import run_post
