@@ -93,6 +93,8 @@ def _to_api_items(episodes: Iterable[Episode], target_date: str) -> list[dict]:
                 ),
                 "status": "backlog",
                 "addedOn": target_date,
+                # 放送日時(日本時間)。watch-listの一覧は同じ日の中でこの順に並ぶ。
+                "airedAt": _aired_at(target_date, episode.broadcast_time),
                 "sourceSystem": "tv-program",
                 # 同じアーカイブURLを複数の放送日が共有する場合があるため、
                 # 放送日を含めてエピソード単位のIDにする。URLが無い場合は番組名+タイトルで代用する。
@@ -105,6 +107,21 @@ def _to_api_items(episodes: Iterable[Episode], target_date: str) -> list[dict]:
             }
         )
     return items
+
+
+def _aired_at(target_date: str, broadcast_time: str) -> str | None:
+    """放送日と放送時刻("HH:MM-HH:MM" か "HH:MM")から "YYYY-MM-DDTHH:MM" を作る。
+
+    放送時刻は収集日(target_date)の暦の時刻(NHKはstartDateの日付で絞っている)なので、
+    00:00台の番組もその日の00:00として扱う。時刻が読めなければNoneを返す。
+    """
+    match = re.match(r"\s*(\d{1,2}):(\d{2})", broadcast_time or "")
+    if not match:
+        return None
+    hour, minute = int(match.group(1)), int(match.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return f"{target_date}T{hour:02d}:{minute:02d}"
 
 
 def _media_name(channel: str) -> str:
