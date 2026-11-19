@@ -23,6 +23,22 @@ class NHKScraper(BaseScraper):
     def _convert_to_24h_format(self, time_str: str) -> str:
         return convert_jp_ampm_to_24h(time_str)
 
+    # 番組名の直後に来たら「番組名の接頭辞」とみなす区切り文字
+    _NAME_SEPARATORS = "：:｜|・-–—「」『』【】()（）"
+
+    def _strip_program_name(self, text: str, name: str) -> str:
+        # タイトル先頭の番組名を外す。ただし直後が区切り（空白・「：」・「」など）か末尾の場合だけ。
+        # 「時論公論+ ○○」のように番組名の後ろに文字が続く場合は派生企画名の一部なので残す。
+        if not text or not name:
+            return (text or "").strip()
+        pattern = re.sub(r"\\?[!！]", "[!！]", re.escape(name))
+        sep = re.escape(self._NAME_SEPARATORS)
+        m = re.match(rf"\s*{pattern}(?=$|\s|[{sep}])", text)
+        if not m:
+            return text.strip()
+        rest = text[m.end():]
+        return rest.lstrip().lstrip("：:｜|・-–—").strip()
+
     def _extract_title_from_anchor(self, a_tag, name: str) -> tuple[str, str]:
         p_texts = [p.get_text(" ", strip=True) for p in a_tag.find_all("p")]
         p_texts = [t for t in p_texts if t.strip()]  # 空文字のpタグを除外
@@ -50,12 +66,8 @@ class NHKScraper(BaseScraper):
                 _normalize_punct(title_candidate) != _normalize_punct(name)):
                 
                 # 必要に応じて番組名が含まれている場合は除去する
-                try:
-                    pattern = re.escape(name).replace("\\!", "[!！]")
-                    cleaned = re.sub(pattern, "", title_candidate).strip()
-                except re.error:
-                    cleaned = title_candidate.replace(name, "").strip()
-                
+                cleaned = self._strip_program_name(title_candidate, name)
+
                 final_title = cleaned if (cleaned and len(cleaned) > 0) else title_candidate
                 return prog_name_candidate, final_title
 
@@ -68,11 +80,7 @@ class NHKScraper(BaseScraper):
             if re.fullmatch(r"^『.*』の番組エピソードです$", text):
                 continue
             # テキスト内に番組名が含まれている場合は除去する
-            try:
-                pattern = re.escape(name).replace("\\!", "[!！]")
-                cleaned = re.sub(pattern, "", text).strip()
-            except re.error:
-                cleaned = text.replace(name, "").strip()
+            cleaned = self._strip_program_name(text, name)
 
             if cleaned and len(cleaned) > 0:
                 return name, cleaned
@@ -159,7 +167,7 @@ class NHKScraper(BaseScraper):
                     return parts[0], parts[0]
             elif len(parts) == 1:
                 # 分割できなかった場合は、name を除いてタイトルとする
-                title_text = parts[0].replace(name, "").strip()
+                title_text = self._strip_program_name(parts[0], name)
                 title_text = title_text.strip("「」『』 ")
                 if title_text:
                     return name, title_text
@@ -306,7 +314,7 @@ class NHKScraper(BaseScraper):
                 # ノイズ除去
                 title_candidate = re.sub(r"(?:\d{4}年)?\d{1,2}月\d{1,2}日.*$", "", title_candidate)
                 title_candidate = re.sub(r"^\s*(?:\d+時間\s*)?(?:\d+分\s*)?(?:\d+秒\s*)?", "", title_candidate)
-                title_candidate = title_candidate.replace(name, "").strip()
+                title_candidate = self._strip_program_name(title_candidate, name)
                 title_candidate = title_candidate.strip("「」『』")
 
             if not prog_name_detected:
